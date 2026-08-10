@@ -1,0 +1,8 @@
+{
+  "node_id": "B", "listen_ip": "127.0.0.1", "listen_port": 5001, "role": "router",
+  "neighbors": [
+    {"node_id":"A","ip":"127.0.0.1","port":5000,"cost":1},
+    {"node_id":"C","ip":"127.0.0.1","port":5002,"cost":1}
+  ],
+  "hosts": {"client1":{"gateway":"A"},"server1":{"gateway":"C"}}
+}

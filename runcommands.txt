@@ -1,0 +1,4 @@
+python -m unittest discover -s tests -v
+python -m src.main router --config configs/examples/router_A.json
+python -m src.main server --config configs/examples/server1.json
+python -m src.main client --config configs/examples/client1.json --to server1 --message "Hola servidor"
