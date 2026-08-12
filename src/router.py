@@ -95,11 +95,19 @@ class Router:
             finally:
                 self.forwarding_queue.task_done()
 
-    def _handle_control(self,m:dict,conn:socket.socket) -> None:
+    def _handle_control(self,m:dict,conn:socket.socket|None) -> None:
         sender=m.get("from")
         if sender not in self.neighbors: return
         if m.get("type")=="HELLO":
-            self._mark_up(sender); conn.sendall(encode_line(json.dumps({"type":"HELLO_ACK","from":self.config.node_id,"to":sender})))
+            self._mark_up(sender)
+            # El listener puede haber cerrado `conn` antes de que el worker
+            # procese el mensaje. Abrimos una conexión independiente para el ACK.
+            neighbor=self.neighbors[sender]
+            ack=encode_line(json.dumps({"type":"HELLO_ACK","from":self.config.node_id,"to":sender}))
+            try:
+                send_bytes(neighbor.ip,neighbor.port,ack)
+            except (OSError,ConnectionError):
+                log.debug("[%s] no se pudo enviar HELLO_ACK a %s",self.config.node_id,sender)
         elif m.get("type")=="HELLO_ACK" and m.get("to")==self.config.node_id: self._mark_up(sender)
         elif m.get("type")=="LSA" and self.lsdb.accept(m):
             log.info("[%s] [LSA] accepted origin=%s seq=%s",self.config.node_id,m.get("origin"),m.get("seq")); self._recalculate(); self._flood(m,sender)
