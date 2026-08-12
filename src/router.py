@@ -1,6 +1,6 @@
 """Router Link State: I/O TCP separado de workers de control y datos."""
 from __future__ import annotations
-import json, logging, socket, threading, time
+import json, logging, queue, socket, threading, time
 from pathlib import Path
 from .common.config import NodeConfig, NeighborConfig
 from .common.networking import send_bytes
@@ -18,12 +18,21 @@ class Router:
         self.config=config; self.output_dir=output_dir; self.stop=threading.Event(); self.lock=threading.RLock()
         self.lsdb=LSDB(config.node_id); self.seq=0; self.active: dict[str,float]={}; self.routes={}
         self.neighbors={n.node_id:n for n in config.neighbors}; self.server: socket.socket|None=None
+        self.routing_queue: queue.Queue[tuple[dict, socket.socket]] = queue.Queue()
+        self.forwarding_queue: queue.Queue[tuple[str, dict|None]] = queue.Queue()
+        self.workers: list[threading.Thread] = []
 
     def start(self) -> None:
         self.server=socket.socket(socket.AF_INET,socket.SOCK_STREAM); self.server.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
         self.server.settimeout(1); self.server.bind((self.config.listen_ip,self.config.listen_port)); self.server.listen()
         self._change_lsa(force=True)
-        threads=[threading.Thread(target=self._hello_loop,name=f"{self.config.node_id}-hello"), threading.Thread(target=self._dead_loop,name=f"{self.config.node_id}-dead")]
+        threads=[
+            threading.Thread(target=self._routing_worker,name=f"{self.config.node_id}-routing"),
+            threading.Thread(target=self._forwarding_worker,name=f"{self.config.node_id}-forwarding"),
+            threading.Thread(target=self._hello_loop,name=f"{self.config.node_id}-hello"),
+            threading.Thread(target=self._dead_loop,name=f"{self.config.node_id}-dead"),
+        ]
+        self.workers=threads
         for t in threads: t.start()
         log.info("[%s] router escuchando en %s:%s",self.config.node_id,self.config.listen_ip,self.config.listen_port)
         try:
@@ -40,6 +49,10 @@ class Router:
         if self.server:
             try: self.server.close()
             except OSError: pass
+        self.routing_queue.put((None, None))  # type: ignore[arg-type]
+        self.forwarding_queue.put((None, None))
+        for worker in self.workers:
+            if worker is not threading.current_thread(): worker.join(timeout=2)
 
     def _connection(self, conn: socket.socket) -> None:
         buffer=LineBuffer(); conn.settimeout(SOCKET_READ_TIMEOUT)
@@ -54,12 +67,33 @@ class Router:
 
     def _dispatch(self,line: bytes, conn: socket.socket) -> None:
         kind=classify_line(line)
-        if kind=="data": self._handle_data(line.decode("ascii"))
+        if kind=="data": self.forwarding_queue.put(("frame", line.decode("ascii")))
         else:
             try: message=json.loads(line.decode("utf-8"))
             except (UnicodeDecodeError,json.JSONDecodeError): return
-            if message.get("type")=="MESSAGE": self._handle_data_packet(message)
-            else: self._handle_control(message,conn)
+            if message.get("type")=="MESSAGE": self.forwarding_queue.put(("packet", message))
+            else: self.routing_queue.put((message, conn))
+
+    def _routing_worker(self) -> None:
+        """Procesa exclusivamente HELLO, ACK y LSA."""
+        while not self.stop.is_set():
+            message, conn = self.routing_queue.get()
+            try:
+                if message is None: return
+                self._handle_control(message, conn)
+            finally:
+                self.routing_queue.task_done()
+
+    def _forwarding_worker(self) -> None:
+        """Procesa exclusivamente DATA y el reenvío entre routers."""
+        while not self.stop.is_set():
+            kind, value = self.forwarding_queue.get()
+            try:
+                if kind is None: return
+                if kind == "frame": self._handle_data(value)  # type: ignore[arg-type]
+                elif kind == "packet": self._handle_data_packet(value)  # type: ignore[arg-type]
+            finally:
+                self.forwarding_queue.task_done()
 
     def _handle_control(self,m:dict,conn:socket.socket) -> None:
         sender=m.get("from")

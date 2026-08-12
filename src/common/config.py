@@ -1,10 +1,60 @@
 """Carga y validación estricta de configuraciones JSON."""
 from __future__ import annotations
-import ipaddress, json
+import ipaddress, json, os, re
 from dataclasses import dataclass
 from pathlib import Path
 
 class ConfigError(ValueError): pass
+
+_ENV_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+def _read_dotenv(path: Path) -> dict[str, str]:
+    """Lee un .env sencillo sin depender de python-dotenv."""
+    values: dict[str, str] = {}
+    if not path.exists():
+        return values
+    try:
+        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                raise ConfigError(f"línea inválida en {path}:{line_number}")
+            key, value = line.split("=", 1)
+            key, value = key.strip(), value.strip()
+            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
+                raise ConfigError(f"nombre inválido en {path}:{line_number}")
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+                value = value[1:-1]
+            values[key] = value
+    except OSError as exc:
+        raise ConfigError(f"no se pudo leer {path}: {exc}") from exc
+    return values
+
+def _config_variables(config_path: Path) -> dict[str, str]:
+    """Combina .env del proyecto con variables reales del proceso."""
+    candidates = [Path.cwd() / ".env", config_path.parent / ".env"]
+    for parent in config_path.parents:
+        candidates.append(parent / ".env")
+    values: dict[str, str] = {}
+    for candidate in dict.fromkeys(candidates):
+        values.update(_read_dotenv(candidate))
+    values.update(os.environ)  # el entorno del sistema tiene prioridad
+    return values
+
+def _expand(value: object, variables: dict[str, str]) -> object:
+    if isinstance(value, str):
+        def replace(match: re.Match[str]) -> str:
+            name = match.group(1)
+            if name not in variables:
+                raise ConfigError(f"variable de entorno no definida: {name}")
+            return variables[name]
+        return _ENV_PATTERN.sub(replace, value)
+    if isinstance(value, list):
+        return [_expand(item, variables) for item in value]
+    if isinstance(value, dict):
+        return {key: _expand(item, variables) for key, item in value.items()}
+    return value
 
 @dataclass(frozen=True)
 class NeighborConfig:
@@ -17,10 +67,12 @@ class NodeConfig:
     hosts: dict = None; attached_hosts: tuple[dict, ...] = (); gateway: dict | None = None
 
 def load_config(path: str | Path) -> NodeConfig:
+    config_path = Path(path)
     try:
-        raw = json.loads(Path(path).read_text(encoding="utf-8"))
+        raw = json.loads(config_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ConfigError(f"no se pudo cargar configuración: {exc}") from exc
+    raw = _expand(raw, _config_variables(config_path))
     if not isinstance(raw, dict): raise ConfigError("configuración debe ser objeto JSON")
     node_id, role = raw.get("node_id"), raw.get("role")
     if not isinstance(node_id, str) or not node_id or node_id.isspace(): raise ConfigError("node_id inválido")

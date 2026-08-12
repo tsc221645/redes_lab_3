@@ -12,6 +12,8 @@ pip install -r requirements-dev.txt
 
 `src/protocol` define framing y mensajes; `src/routing` contiene LSDB, Dijkstra y CSV; `src/error_control` implementa Hamming y DATA; `src/router.py` coordina workers; `configs/examples` contiene una topología reproducible.
 
+Las IP se pueden parametrizar con `.env`: copia `.env.example` como `.env` y reemplaza `ROUTER_A_IP`, `ROUTER_B_IP` y `ROUTER_C_IP` por las salidas reales de `tailscale ip -4`. Los JSON usan referencias `${ROUTER_A_IP}`; el cargador las expande sin dependencias externas. El archivo `.env` no debe subirse al repositorio.
+
 ## Protocolo
 
 Los mensajes de control son JSON UTF-8 con LF final. DATA es una línea ASCII de bits Hamming. HELLO mantiene vecinos activos; cada cambio genera un LSA versionado y se inunda solo una vez por secuencia. Dijkstra usa los costos anunciados y desempata por el next-hop lexicográficamente menor. El detalle formal está en [docs/protocol.md](docs/protocol.md).

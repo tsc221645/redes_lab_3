@@ -1,8 +1,22 @@
 {
-  "node_id": "A", "listen_ip": "127.0.0.1", "listen_port": 5000, "role": "router",
+  "node_id": "A",
+  "listen_ip": "${ROUTER_A_IP}",
+  "listen_port": 5000,
+  "role": "router",
   "neighbors": [
-    {"node_id":"B","ip":"127.0.0.1","port":5001,"cost":1},
-    {"node_id":"C","ip":"127.0.0.1","port":5002,"cost":5}
+    {
+      "node_id": "B",
+      "ip": "${ROUTER_B_IP}",
+      "port": 5000,
+      "cost": 1
+    }
   ],
-  "hosts": {"client1":{"gateway":"A"},"server1":{"gateway":"C"}}
+  "hosts": {
+    "client1": {
+      "gateway": "A"
+    },
+    "server1": {
+      "gateway": "C"
+    }
+  }
 }

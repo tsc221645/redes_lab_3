@@ -1,1 +1,11 @@
-{"node_id":"client1","role":"client","listen_ip":"127.0.0.1","listen_port":6000,"gateway":{"node_id":"A","ip":"127.0.0.1","port":5000}}
+{
+  "node_id": "client1",
+  "role": "client",
+  "listen_ip": "${ROUTER_A_IP}",
+  "listen_port": 6000,
+  "gateway": {
+    "node_id": "A",
+    "ip": "${ROUTER_A_IP}",
+    "port": 5000
+  }
+}
