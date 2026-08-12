@@ -9,12 +9,6 @@
       "ip": "${ROUTER_A_IP}",
       "port": 5000,
       "cost": 1
-    },
-    {
-      "node_id": "C",
-      "ip": "${ROUTER_C_IP}",
-      "port": 5000,
-      "cost": 1
     }
   ],
   "hosts": {
@@ -22,7 +16,14 @@
       "gateway": "A"
     },
     "server1": {
-      "gateway": "C"
+      "gateway": "B"
     }
-  }
+  },
+  "attached_hosts": [
+    {
+      "node_id": "server1",
+      "ip": "${ROUTER_B_IP}",
+      "port": 6001
+    }
+  ]
 }

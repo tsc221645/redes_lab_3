@@ -16,7 +16,7 @@
       "gateway": "A"
     },
     "server1": {
-      "gateway": "C"
+      "gateway": "B"
     }
   }
 }
