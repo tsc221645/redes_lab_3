@@ -12,11 +12,15 @@ def run_server(config: NodeConfig) -> None:
         while True:
             try: conn,_=server.accept()
             except socket.timeout: continue
+            except OSError as exc:
+                log.error("Error aceptando conexión: %s", exc)
+                continue
             with conn:
                 buf=LineBuffer()
                 for line in buf.feed(conn.recv(65536)):
                     try:
                         packet=json.loads(line.decode("utf-8")); log.info("[%s] recibido mensaje de %s (hops=%s)",config.node_id,packet.get("from"),packet.get("hops"))
                     except (UnicodeDecodeError,json.JSONDecodeError): log.warning("mensaje inválido")
-    except KeyboardInterrupt: pass
+    except KeyboardInterrupt:
+        log.info("Servidor detenido por el usuario.")
     finally: server.close()
