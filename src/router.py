@@ -27,10 +27,10 @@ class Router:
         self.server.settimeout(1); self.server.bind((self.config.listen_ip,self.config.listen_port)); self.server.listen()
         self._change_lsa(force=True)
         threads=[
-            threading.Thread(target=self._routing_worker,name=f"{self.config.node_id}-routing"),
-            threading.Thread(target=self._forwarding_worker,name=f"{self.config.node_id}-forwarding"),
-            threading.Thread(target=self._hello_loop,name=f"{self.config.node_id}-hello"),
-            threading.Thread(target=self._dead_loop,name=f"{self.config.node_id}-dead"),
+            threading.Thread(target=self._routing_worker, daemon=True,name=f"{self.config.node_id}-routing"),
+            threading.Thread(target=self._forwarding_worker, daemon=True,name=f"{self.config.node_id}-forwarding"),
+            threading.Thread(target=self._hello_loop, daemon=True,name=f"{self.config.node_id}-hello"),
+            threading.Thread(target=self._dead_loop, daemon=True, name=f"{self.config.node_id}-dead"),
         ]
         self.workers=threads
         for t in threads: t.start()
@@ -46,6 +46,7 @@ class Router:
                         self.config.node_id,
                         exc)
         finally: self.shutdown()
+        log.info("[%s] Router detenido.", self.config.node_id)
         
 
     def shutdown(self) -> None:
