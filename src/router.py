@@ -41,7 +41,12 @@ class Router:
                 except socket.timeout: continue
                 threading.Thread(target=self._connection, args=(conn,), daemon=True).start()
         except KeyboardInterrupt: log.info("[%s] interrupción recibida",self.config.node_id)
+        except Exception as exc:
+            log.exception("[%s] Error del router: %s",
+                        self.config.node_id,
+                        exc)
         finally: self.shutdown()
+        
 
     def shutdown(self) -> None:
         if self.stop.is_set(): return
@@ -63,6 +68,8 @@ class Router:
                 if not data: break
                 for line in buffer.feed(data): self._dispatch(line,conn)
         except (OSError,FrameError) as exc: log.debug("[%s] conexión terminada: %s",self.config.node_id,exc)
+        except ConnectionResetError:
+            log.info("[%s] Cliente desconectado.", self.config.node_id)
         finally: conn.close()
 
     def _dispatch(self,line: bytes, conn: socket.socket) -> None:
@@ -70,17 +77,28 @@ class Router:
         if kind=="data": self.forwarding_queue.put(("frame", line.decode("ascii")))
         else:
             try: message=json.loads(line.decode("utf-8"))
-            except (UnicodeDecodeError,json.JSONDecodeError): return
-            if message.get("type")=="MESSAGE": self.forwarding_queue.put(("packet", message))
-            else: self.routing_queue.put((message, conn))
+            except UnicodeDecodeError:
+                log.warning("[%s] Mensaje no UTF-8 recibido",
+                            self.config.node_id)
+                return
+
+            except json.JSONDecodeError:
+                log.warning("[%s] JSON inválido recibido",
+                            self.config.node_id)
+                return
 
     def _routing_worker(self) -> None:
         """Procesa exclusivamente HELLO, ACK y LSA."""
         while not self.stop.is_set():
             message, conn = self.routing_queue.get()
             try:
-                if message is None: return
                 self._handle_control(message, conn)
+            except Exception as exc:
+                log.exception(
+                    "[%s] Error procesando mensaje de control: %s",
+                    self.config.node_id,
+                    exc
+                )
             finally:
                 self.routing_queue.task_done()
 
@@ -138,13 +156,24 @@ class Router:
             if nid!=exclude and nid in self.active:
                 copy=dict(lsa); copy["from"]=self.config.node_id
                 try: send_bytes(n.ip,n.port,encode_line(json.dumps(copy,separators=(",",":"))))
-                except (OSError,ConnectionError): log.debug("[%s] vecino %s no disponible",self.config.node_id,nid)
+                except (OSError, ConnectionError) as exc:
+                    log.debug(
+                        "[%s] No se pudo enviar LSA a %s (%s)",
+                        self.config.node_id,
+                        nid,
+                        exc
+                    )
 
     def _hello_loop(self) -> None:
         while not self.stop.wait(HELLO_INTERVAL):
             for n in self.neighbors.values():
                 try: send_bytes(n.ip,n.port,encode_line(json.dumps({"type":"HELLO","from":self.config.node_id}))); log.debug("[%s] HELLO -> %s",self.config.node_id,n.node_id)
-                except (OSError,ConnectionError): pass
+                except (OSError, ConnectionError):
+                    log.debug(
+                        "[%s] HELLO falló hacia %s",
+                        self.config.node_id,
+                        n.node_id
+                    )
 
     def _dead_loop(self) -> None:
         while not self.stop.wait(1):
@@ -176,4 +205,22 @@ class Router:
     def _deliver_host(self,packet:dict) -> None:
         target=next((h for h in self.config.attached_hosts if h.get("node_id")==packet.get("to")),None)
         if not target: log.warning("[%s] host local no configurado: %s",self.config.node_id,packet.get("to")); return
-        send_bytes(target["ip"],target["port"],encode_line(json.dumps(packet,ensure_ascii=False,separators=(",",":"))))
+        try:
+            send_bytes(
+                target["ip"],
+                target["port"],
+                encode_line(
+                    json.dumps(
+                        packet,
+                        ensure_ascii=False,
+                        separators=(",", ":")
+                    )
+                )
+            )
+        except (ConnectionError, OSError) as exc:
+            log.warning(
+                "[%s] No se pudo entregar al host %s: %s",
+                self.config.node_id,
+                packet.get("to"),
+                exc
+            )

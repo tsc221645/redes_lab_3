@@ -19,4 +19,10 @@ def main() -> None:
     elif args.to and args.message is not None: send_message(config,args.to,args.message)
     else: raise SystemExit("client requiere --to y --message")
 
-if __name__ == "__main__": main()
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        logging.info("Programa detenido por el usuario.")
+    except Exception as e:
+        logging.exception("Error inesperado: %s", e)
