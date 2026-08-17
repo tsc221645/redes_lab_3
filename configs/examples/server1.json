@@ -1,6 +1,11 @@
 {
-  "node_id": "server1",
+  "node_id": "bank1",
   "role": "server",
   "listen_ip": "${ROUTER_B_IP}",
-  "listen_port": 6001
+  "listen_port": 6001,
+  "gateway": {
+    "node_id": "B",
+    "ip": "${ROUTER_B_IP}",
+    "port": 5000
+  }
 }

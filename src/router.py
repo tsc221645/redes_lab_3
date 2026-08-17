@@ -68,25 +68,69 @@ class Router:
                 except socket.timeout: continue
                 if not data: break
                 for line in buffer.feed(data): self._dispatch(line,conn)
-        except (OSError,FrameError) as exc: log.debug("[%s] conexión terminada: %s",self.config.node_id,exc)
+        
         except ConnectionResetError:
             log.info("[%s] Cliente desconectado.", self.config.node_id)
+        except (OSError, FrameError) as exc:
+            log.debug(
+                "[%s] conexión terminada: %s",
+                self.config.node_id,
+                exc,
+            )
         finally: conn.close()
 
-    def _dispatch(self,line: bytes, conn: socket.socket) -> None:
-        kind=classify_line(line)
-        if kind=="data": self.forwarding_queue.put(("frame", line.decode("ascii")))
-        else:
-            try: message=json.loads(line.decode("utf-8"))
-            except UnicodeDecodeError:
-                log.warning("[%s] Mensaje no UTF-8 recibido",
-                            self.config.node_id)
-                return
+    def _dispatch(
+        self,
+        line: bytes,
+        conn: socket.socket,
+    ) -> None:
 
-            except json.JSONDecodeError:
-                log.warning("[%s] JSON inválido recibido",
-                            self.config.node_id)
-                return
+        kind = classify_line(line)
+
+        if kind == "data":
+            try:
+                frame = line.decode("ascii")
+                self.forwarding_queue.put(
+                    ("frame", frame)
+                )
+
+            except UnicodeDecodeError:
+                log.warning(
+                    "[%s] DATA contiene caracteres inválidos.",
+                    self.config.node_id,
+                )
+
+            return
+
+        try:
+            message = json.loads(
+                line.decode("utf-8")
+            )
+
+        except UnicodeDecodeError:
+            log.warning(
+                "[%s] Mensaje no UTF-8 recibido.",
+                self.config.node_id,
+            )
+            return
+
+        except json.JSONDecodeError:
+            log.warning(
+                "[%s] JSON inválido recibido.",
+                self.config.node_id,
+            )
+            return
+
+        if not isinstance(message, dict):
+            log.warning(
+                "[%s] Mensaje de control inválido.",
+                self.config.node_id,
+            )
+            return
+
+        self.routing_queue.put(
+            (message, conn)
+        )
 
     def _routing_worker(self) -> None:
         """Procesa exclusivamente HELLO, ACK y LSA."""

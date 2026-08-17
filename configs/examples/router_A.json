@@ -12,11 +12,18 @@
     }
   ],
   "hosts": {
-    "client1": {
+    "atm1": {
       "gateway": "A"
     },
-    "server1": {
+    "bank1": {
       "gateway": "B"
     }
-  }
+  },
+  "attached_hosts": [
+    {
+      "node_id": "atm1",
+      "ip": "${ROUTER_A_IP}",
+      "port": 6000
+    }
+  ]
 }

@@ -1,5 +1,5 @@
 {
-  "node_id": "client1",
+  "node_id": "atm1",
   "role": "client",
   "listen_ip": "${ROUTER_A_IP}",
   "listen_port": 6000,
