@@ -19,10 +19,18 @@
   ],
   "hosts": {
     "client1": {
-      "gateway": "x"
+      "gateway": "z"
     },
     "server1": {
-      "gateway": "z"
+      "gateway": "x"
     }
-  }
+  },
+
+  "attached_hosts": [
+    {
+      "node_id": "server1",
+      "ip": "${X_IP}",
+      "port": 6001
+    }
+  ]
 }

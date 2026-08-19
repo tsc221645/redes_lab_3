@@ -8,7 +8,9 @@ from typing import Any
 
 from ..common.config import NodeConfig
 from ..common.networking import send_bytes
-from ..protocol.framing import LineBuffer, encode_line
+from ..protocol.framing import LineBuffer
+from ..error_control.serialization import packet_to_frame
+
 from .protocol import (
     AUTH,
     BALANCE,
@@ -197,13 +199,7 @@ class ATMClient:
         self.response_event.clear()
 
         try:
-            data = encode_line(
-                json.dumps(
-                    packet,
-                    ensure_ascii=False,
-                    separators=(",", ":"),
-                )
-            )
+            data = packet_to_frame(packet)
 
             send_bytes(
                 ip,

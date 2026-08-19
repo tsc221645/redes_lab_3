@@ -1,7 +1,7 @@
 {
   "node_id": "B",
   "listen_ip": "${ROUTER_B_IP}",
-  "listen_port": 5000,
+  "listen_port": 5001,
   "role": "router",
   "neighbors": [
     {

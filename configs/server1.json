@@ -6,6 +6,6 @@
   "gateway": {
     "node_id": "B",
     "ip": "${ROUTER_B_IP}",
-    "port": 5000
+    "port": 5001
   }
 }

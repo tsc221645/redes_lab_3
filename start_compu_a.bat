@@ -11,7 +11,7 @@ echo.
 pause
 
 echo Enviando mensaje desde client1 hacia server1...
-python -m src.main client --config configs\examples\client1.json --to server1 --message "Hola desde la computadora A"
+python -m src.main client --config configs\client1.json --to server1 --message "Hola desde la computadora A"
 
 pause
 endlocal
